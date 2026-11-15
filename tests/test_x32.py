@@ -1,6 +1,7 @@
 """Tests for x32.py against a fake console on localhost. Run: python3 -m unittest discover tests"""
 import io
 import json
+import os
 import socket
 import sys
 import tempfile
@@ -9,6 +10,9 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+# Never let tests read the real .env or talk to the real console.
+os.environ["X32_ENV"] = os.devnull
+os.environ.pop("X32_IP", None)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import x32  # noqa: E402
 
@@ -155,6 +159,22 @@ class TestConsole(Base):
         table = self.console(live=False).dump()
         self.assertIn("Kick", table)
         self.assertEqual(len(table.splitlines()), 33)
+
+
+class TestEnv(unittest.TestCase):
+    def test_load_env(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / ".env"
+            p.write_text('# comment\nX32_TEST_A=10.0.0.9\nexport X32_TEST_B="quoted"\nX32_TEST_C=\n')
+            os.environ["X32_TEST_B"] = "from-shell"
+            try:
+                x32.load_env(p)
+                self.assertEqual(os.environ["X32_TEST_A"], "10.0.0.9")
+                self.assertEqual(os.environ["X32_TEST_B"], "from-shell")  # real env wins
+                self.assertNotIn("X32_TEST_C", os.environ)  # blank values are skipped
+            finally:
+                for k in ("X32_TEST_A", "X32_TEST_B", "X32_TEST_C"):
+                    os.environ.pop(k, None)
 
 
 class TestCLI(unittest.TestCase):

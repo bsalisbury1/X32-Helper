@@ -21,8 +21,12 @@ The user monitors from Mixing Station on their iPhone, which shows changes live.
 
 ## Usage
 
-The IP is on the rack's Setup → Network screen or in Mixing Station's connection settings.
-`export X32_IP=...` saves typing `--ip`.
+The console IP lives in `.env` as `X32_IP`. To start, copy `.env.example`. The IP is on the rack's
+Setup → Network screen or in Mixing Station's connection settings.
+
+This is a **public repo**. Never put the IP, wifi name, or wifi password in any committed file,
+including commit messages, code, docs, and examples. Use placeholders like `192.168.x.x`. `.env`,
+`backups/`, and `x32_history.jsonl` are gitignored and stay local.
 
 ```
 python3 x32.py info                       # check connection

@@ -6,12 +6,13 @@ SAFETY: dry-run by default. Reads always go to the console (if an IP is
 given), but writes are only printed unless you pass --live. Every live write
 is logged to x32_history.jsonl so it can be undone with `undo`.
 
-    python3 x32.py --ip 192.168.1.50 dump
-    python3 x32.py --ip 192.168.1.50 gate 1 on --thr -40 --release 120
-    python3 x32.py --ip 192.168.1.50 --live gate 1 on --thr -40 --release 120
-    python3 x32.py --ip 192.168.1.50 --live undo
+    python3 x32.py dump
+    python3 x32.py gate 1 on --thr -40 --release 120
+    python3 x32.py --live gate 1 on --thr -40 --release 120
+    python3 x32.py --live undo
 
-Set X32_IP in the environment to skip --ip.
+The console IP comes from .env (copy .env.example to start). An X32_IP
+environment variable or --ip on the command line overrides it.
 
 Parameter ranges and enum numbering below come from the unofficial X32 OSC
 documentation (Patrick-Gilles Maillot). Confirm them against Mixing Station
@@ -27,7 +28,27 @@ import sys
 import time
 from pathlib import Path
 
-PORT = 10023
+
+def load_env(path=None):
+    """Read KEY=VALUE lines from .env into os.environ. Real environment variables win."""
+    path = Path(path or os.environ.get("X32_ENV", Path(__file__).with_name(".env")))
+    if not path.is_file():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip().removeprefix("export ").strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if value and key not in os.environ:
+            os.environ[key] = value
+
+
+load_env()
+
+PORT = int(os.environ.get("X32_PORT", 10023))
 HISTORY_FILE = Path(os.environ.get("X32_HISTORY", Path(__file__).with_name("x32_history.jsonl")))
 
 COLORS = ["OFF", "RD", "GN", "YE", "BL", "MG", "CY", "WH",
@@ -214,7 +235,7 @@ class X32:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.connect((self.ip, port))
         elif live:
-            raise X32Error("--live needs the console IP (--ip or X32_IP)")
+            raise X32Error("--live needs the console IP: set X32_IP in .env (see .env.example) or pass --ip")
 
     def close(self):
         if self.sock:
@@ -505,7 +526,7 @@ class X32:
 
 def build_parser():
     p = argparse.ArgumentParser(description="Control a Behringer X32 over OSC (dry-run unless --live).")
-    p.add_argument("--ip", help="console IP (or set X32_IP)")
+    p.add_argument("--ip", help="console IP (default: X32_IP from .env)")
     p.add_argument("--live", action="store_true", help="actually send writes to the console")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -570,7 +591,7 @@ def main(argv=None):
                 print(f"LIVE: writing to {x.ip}")
         need_conn = args.cmd in {"info", "dump", "get", "showgate", "fx", "backup"}
         if need_conn and not x.sock:
-            raise X32Error("this command needs the console IP (--ip or X32_IP)")
+            raise X32Error("this command needs the console IP: set X32_IP in .env (see .env.example) or pass --ip")
 
         c = args.cmd
         if c == "info":
